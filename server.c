@@ -3,11 +3,10 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <netinet/in.h>
-#include <unistd.h>    // системная библиотека unix
+#include <unistd.h> // системная библиотека unix
 #include <string.h>
 #include "defines.h"
-
-void getrequesttype(char *link, char buffer[MAX_BUFFER_SIZE]);
+#include "http_logic.c"
 
 int main()
 {
@@ -26,7 +25,7 @@ int main()
     server_addr.sin_port = htons(DEFAULT_PORT);
     server_addr.sin_addr.s_addr = inet_addr(DEFAULT_IP);
 
-    int result = bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    int result = bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
     if (result < 0)
     {
         perror("[-] bind error");
@@ -53,7 +52,7 @@ int main()
         result = recv(client_socket, buffer, MAX_BUFFER_SIZE, 0);
 
         char *response;
-        
+
         if (result == 0)
         {
             perror("[-] connection closed...\n");
@@ -68,40 +67,48 @@ int main()
             buffer[result] = '\0';
             printf("%s\n", buffer);
 
-            char request_type[10];
-            getrequesttype(request_type, buffer);
-            printf("request_type = %s\n", request_type);
-            int b = strcmp(request_type, "GET\0");
-            printf("request_type == GET = %d\n", b);
-            
-            response = "HTTP/1.1 200 OK\r\nVersion: HTTP/1.1\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 15\r\n\r\n<h1>index</h1>";
+            char request_method[10];
+            char link[50];
+            getrequestmethod(request_method, buffer);
+            getlink(link, buffer);
+            printf("link = %s\n", link);
+            printf("request_method = %s\n", request_method);
 
-            result = send(client_socket, response, strlen(response), 0);
-            if (result < 0)
+            if (strcmp(request_method, "GET") == 0)
             {
-                perror("[-] send error");
+                if (strcmp(link, "/") == 0 || strcmp(link, "/home/") == 0 || strcmp(link, "/home") == 0)
+                {
+                    response = "HTTP/1.1 200 OK\r\nVersion: HTTP/1.1\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 1024\r\n\r\n<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>index</title></head><body><h1>index</h1></body></html>";
+                    result = send(client_socket, response, strlen(response), 0);
+                    if (result < 0)
+                    {
+                        perror("[-] send error");
+                    }
+                    else if (result > 0)
+                    {
+                        printf("HTTP/1.1 200 OK\n");
+                    }
+                    close(client_socket);
+                }
+                else
+                {
+                    response = "HTTP/1.1 404 NOT FOUND\r\nVersion: HTTP/1.1\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 20\r\n\r\n<h1>NOT FOUND</h1>";
+                    result = send(client_socket, response, strlen(response), 0);
+                    if (result < 0)
+                    {
+                        perror("[-] send error");
+                    }
+                    else if (result > 0)
+                    {
+                        printf("HTTP/1.1 404 NOT FOUND\n");
+                    }
+                    // close(client_socket);
+                }
             }
-            else if (result > 0)
-            {
-                printf("HTTP/1.1 200 OK\n");
-            }
-            close(client_socket);
         }
     }
 
     close(server_socket);
 
     return 0;
-}
-
-void getrequesttype(char *request_type, char buffer[MAX_BUFFER_SIZE]) {
-    int pos = 0;
-
-    memset(request_type, '\0', 10);
-    while (buffer[pos] != ' ')
-    {
-        request_type[pos] = buffer[pos];
-        pos++;
-    }
-    request_type[pos] = '\0';
 }
